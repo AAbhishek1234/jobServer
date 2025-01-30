@@ -1,28 +1,22 @@
-import { verifyAccessToken } from "../utils/verifyAccessToken.js";
+import jwt from "jsonwebtoken";
+import { secretKey } from "../constants/auth.js";
 
-export const authenticateToken = function (req, res, next) {
-  console.log('authenticatetToken')
+export const authenticateToken = (req, res, next) => {
+    const authHeader = req.headers["authorization"]; // Extract auth header
+    if (!authHeader) {
+        return res.status(401).json({ msg: "Access denied, no token provided" });
+    }
 
-  if(!req.headers && !req.headers.authorization.startsWith('bearer')){
-    return res.status(400).json({message:'unauthorized '})
-  }
-  const token = req.headers.authorization.split(' ')[1];
-  console.log("token", token);
+    const token = authHeader.split(" ")[1]; // Extract token from "Bearer TOKEN"
+    if (!token) {
+        return res.status(401).json({ msg: "Invalid token format" });
+    }
 
-
-  if (!token) {
-    return res.sendStatus(401);
-  }
-
-  const result = verifyAccessToken(token);
-  let userId = result.data.userId
-
-  req.userId = userId;
-  if (!result.success) {
-    console.log(result.error);
-    return res.status(403).json({ error: "Invalid Request!" });
-  }
-
-
-  next();
+    try {
+        const decoded = jwt.verify(token, secretKey); // Verify token
+        req.user = decoded; // Attach user data to request
+        next(); // Move to next middleware
+    } catch (error) {
+        return res.status(403).json({ msg: "Invalid token", error: error.message });
+    }
 };

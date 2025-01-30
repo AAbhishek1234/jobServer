@@ -1,105 +1,77 @@
-import User from '../models/User.js';
 import bcrypt from 'bcrypt';
-import { generateHashPassword } from '../utils/generateHash.js';
-
+import jwt from 'jsonwebtoken';
+import User from '../models/User.js';
+import { secretKey } from '../constants/auth.js';
+// Register user
 export const register = async (req, res) => {
+    const { fullname, email, password, role, phoneNumber } = req.body;
+    
+    if (!fullname || !email || !password || !role || !phoneNumber) {
+        return res.status(400).json({ msg: "Something is missing" });
+    }
+
     try {
-        const { fullName, email, password, role, phoneNumber } = req.body;
+        const userExists = await User.findOne({ email });
+        if (userExists) return res.status(409).json({ msg: "Email already exists!" });
 
-        if (!fullName || !email || !password || !role || !phoneNumber) {
-            return res.status(400).json({ msg: "Something is missing", success: false });
-        }
-
-        
-        const userExists = await User.findOne({ email }).lean();
-        if (userExists) {
-            return res.status(409).json({ message: "Email already exists!", success: false });
-        }
-
-        const hashedPassword = await generateHashPassword(password);
-
-        const savedUser = await User.create({
-            fullName,
+        const hashedPassword = await bcrypt.hash(password, 10);
+        const newUser = new User({
+            fullname,
             email,
-            password: hashedPassword, 
+            password: hashedPassword,
             role,
-            phoneNumber,
+            phoneNumber
         });
 
-        res.status(201).json({ message: "User registered successfully", success: true, user: savedUser });
+        await newUser.save();
+        res.status(201).json({ msg: "User registered successfully" });
     } catch (error) {
-        res.status(500).json({ message: error.message, success: false });
+        res.status(500).json({ msg: "Server error", error });
     }
 };
 
-
-
-
-
-// export const login = async(req,res)=>{
-//     try {
-//         const {email,password,role} = req.body;
-//         if (!email || !password || !role ) {
-//             return res.status(400).json({ msg: "Something is missing", success: false });
-//         }
-        
-// const user = await User.findOne({email});
-// if(!user){
-//     return res.status(400).json({msg:"incorrect email or password",success:false})
-// }
-//    const isPasswordMatch = await bcrypt.compare(password,user.password);
-//    if(!isPasswordMatch){
-//     return res.status(400).json({msg:"incorrect email or password",success:false})
-//    }
-//    if(role != user.role){
-//     return res.status(400).json({msg:"account doest not with current role"})
-//    }
-//     } catch (error) {
-//         return res.status(500).json({msg:"internal server error"})
-//     }
-// }
-
-
-
-
-
+// Login user
 
 export const login = async (req, res) => {
     try {
         const { email, password, role } = req.body;
 
-        // Validate the input
         if (!email || !password || !role) {
             return res.status(400).json({ msg: "Something is missing", success: false });
         }
 
-        // Check if the user exists
         const user = await User.findOne({ email });
         if (!user) {
-            return res.status(401).json({ msg: "Incorrect email or password", success: false }); // 401 Unauthorized
+            return res.status(401).json({ msg: "Incorrect email or password", success: false });
         }
 
-        // Compare the password
         const isPasswordMatch = await bcrypt.compare(password, user.password);
         if (!isPasswordMatch) {
-            return res.status(401).json({ msg: "Incorrect email or password", success: false }); // 401 Unauthorized
+            return res.status(401).json({ msg: "Incorrect email or password", success: false });
         }
 
-        // Check the role
         if (role !== user.role) {
-            return res.status(403).json({ msg: "Account does not match the current role", success: false }); // 403 Forbidden
+            return res.status(403).json({ msg: "Account does not match the current role", success: false });
         }
 
-        // Successful login
+        // Generate JWT Token
+        const token = jwt.sign(
+            { userId: user._id, email: user.email, role: user.role },
+            secretKey,  // Use the same secretKey here
+            { expiresIn: "365d" }
+        );
+
         res.status(200).json({
             msg: "Login successful",
             success: true,
+            token,  // Return the token
             user: {
                 id: user._id,
                 fullName: user.fullName,
                 email: user.email,
                 role: user.role,
                 phoneNumber: user.phoneNumber,
+                profile: user.profile,
             },
         });
     } catch (error) {
@@ -109,27 +81,51 @@ export const login = async (req, res) => {
 };
 
 
-
-
-
-export const updateProfile = async(req,res)=>{
+export const updateProfile = async (req, res) => {
     try {
-        const {fullName,email,phoneNumber,bio,skills}= req.body;
-        if (!fullName || !email || !bio || !skills || !phoneNumber) {
-            return res.status(400).json({ msg: "Something is missing", success: false });
+        const { fullname, email, phoneNumber, bio, skills } = req.body;
+
+        if (!fullname || !email || !phoneNumber || !bio || !skills) {
+            return res.status(400).json({ message: "Something is missing", success: false });
         }
-    const skillsArray = skills.split(",");
-    const userId = req.id;
-    let user = await User.findById(userId);
-    if(!user){
-        return res.status(404).json({message:"user not found",success:false})
-    }
-    user.fullName = fullName,
-    user.email = email,
-    user.phoneNumber = phoneNumber,
-    user.profile.bio = bio,
-    user.profile.skills = skillsArray
+
+        const skillsArray = skills.split(",");
+        const userId = req.user.userId;
+
+        console.log("Authenticated User ID:", userId);
+
+        let user = await User.findById(userId);
+        if (!user) {
+            return res.status(404).json({ message: "User not found", success: false }); // ✅ Use 404 for not found
+        }
+
+        // Update user data
+        user.fullname = fullname;
+        user.email = email;
+        user.phoneNumber = phoneNumber;
+        user.profile.bio = bio;
+        user.profile.skills = skillsArray;
+
+        await user.save();
+
+        return res.status(200).json({
+            message: "Profile updated successfully",
+            success: true,
+            user: {
+                _id: user._id,
+                fullname: user.fullname,
+                email: user.email,
+                phoneNumber: user.phoneNumber,
+                role: user.role,
+                profile: user.profile,
+            },
+        });
     } catch (error) {
-        
+        console.error("Error in updateProfile:", error);
+        res.status(500).json({ message: "Internal server error", success: false });
     }
-}
+};
+
+
+
+

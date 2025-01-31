@@ -1,10 +1,11 @@
 import express from 'express';
-import { register, login, updateProfile } from '../controllers/userController.js';
+import { register, login, updateProfile, logout } from '../controllers/userController.js';
 import { authenticateToken } from '../middleware/authenticateToken.js';
 const router = express.Router();
 
 router.post('/register', register);
 router.post('/login', login);
 router.put("/updateProfile",authenticateToken,updateProfile);
+router.get("/logout",authenticateToken,logout);
 
 export default router;

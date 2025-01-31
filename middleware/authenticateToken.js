@@ -1,22 +1,20 @@
 import jwt from "jsonwebtoken";
-import { secretKey } from "../constants/auth.js";
 
 export const authenticateToken = (req, res, next) => {
-    const authHeader = req.headers["authorization"]; // Extract auth header
-    if (!authHeader) {
-        return res.status(401).json({ msg: "Access denied, no token provided" });
+    const authHeader = req.header("Authorization");
+
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return res.status(401).json({ message: "Access denied. No token provided.", success: false });
     }
 
-    const token = authHeader.split(" ")[1]; // Extract token from "Bearer TOKEN"
-    if (!token) {
-        return res.status(401).json({ msg: "Invalid token format" });
-    }
+    const token = authHeader.split(" ")[1]; // Extract the token from "Bearer <token>"
 
     try {
-        const decoded = jwt.verify(token, secretKey); // Verify token
-        req.user = decoded; // Attach user data to request
-        next(); // Move to next middleware
+        const decoded = jwt.verify(token, "this-is-secret-key"); // Make sure this matches your login secret
+        req.user = decoded;  // Attach user data
+        req.id = decoded.userId; // Extract userId for requests
+        next();
     } catch (error) {
-        return res.status(403).json({ msg: "Invalid token", error: error.message });
+        return res.status(401).json({ message: "Invalid token", success: false });
     }
 };

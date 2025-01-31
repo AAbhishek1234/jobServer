@@ -5,6 +5,7 @@ title:{type:String,required:true},
 description:{type:String,required:true},
 requirements:[{type:String,required:true}],
 salary:{type:Number,required:true},
+experience:{type:Number,required:true},
 location:{type:String,required:true},
 jobType:{type:String,required:true},
 position:{type:Number,required:true},
@@ -15,7 +16,7 @@ created_by:{type:mongoose.Schema.Types.ObjectId,
     ref:'User',
     required:true
 },
-application:[{
+applications:[{
     type:mongoose.Schema.Types.ObjectId,
     ref:"Application",
 }]
